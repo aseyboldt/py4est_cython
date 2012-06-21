@@ -3,7 +3,6 @@ from _c_p4est_ghost cimport *
 cdef extern from "p4est_mesh.h" nogil:
     enum: P4EST_MESH_H
 
-    SC_EXTERN_C_BEGIN
     ctypedef struct p4est_mesh_t:
         p4est_locidx_t local_num_vertices
         p4est_locidx_t local_num_quadrants
@@ -31,4 +30,4 @@ cdef extern from "p4est_mesh.h" nogil:
     void p4est_mesh_face_neighbor_init2 (p4est_mesh_face_neighbor_t * mfn, p4est_t * p4est, p4est_ghost_t * ghost, p4est_mesh_t * mesh, p4est_topidx_t which_tree, p4est_locidx_t quadrant_id)
     void p4est_mesh_face_neighbor_init (p4est_mesh_face_neighbor_t * mfn, p4est_t * p4est, p4est_ghost_t * ghost, p4est_mesh_t * mesh, p4est_topidx_t which_tree, p4est_quadrant_t * quadrant)
     p4est_quadrant_t *p4est_mesh_face_neighbor_next (p4est_mesh_face_neighbor_t * mfn, p4est_topidx_t * ntree, p4est_locidx_t * nquad, int *nface, int *nrank)
-    SC_EXTERN_C_END
+
