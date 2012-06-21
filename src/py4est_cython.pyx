@@ -27,8 +27,8 @@ cdef mpi_c.MPI_Comm comm_c = (<MPI.Comm> comm).ob_mpi
 cdef void module_cleanup():
     sc_finalize()
 
-cdef int failed = Py_AtExit(module_cleanup)
-if failed:
+cdef int _failed = Py_AtExit(module_cleanup)
+if _failed:
     raise(ImportError("unable to register cleanup code"))
 
 sc_init(comm_c, 0, 0, NULL, _LP)
@@ -91,7 +91,13 @@ cdef class Quadrant:
 
 
 
-cdef void _user_data_init_callback(p4est_t *p4est,
+
+cdef class InitCallbackContainer:
+    cdef p4est_init_t callback_c
+
+
+
+cdef void _wrap_init_callback(p4est_t *p4est,
                                    p4est_topidx_t which_tree,
                                    p4est_quadrant_t *quadrant):
     cdef P4est p4est_py = <P4est> p4est.user_pointer
@@ -104,25 +110,57 @@ cdef class P4est(object):
     cdef p4est_t *_p4est
     cdef Connectivity _con
     cdef object _init_callback_python
-    cdef p4est_init_t _init_callback_c
     cdef Quadrant _quadrant_template
 
-    def __cinit__(self, Connectivity connectivity not None, user_data_init_callback,
-                  initial_level=4, fill_uniform=0, data_size=5):
+    def __init__(self, Connectivity connectivity not None,
+                 user_data_init_callback=None,
+                 initial_level=4,
+                 fill_uniform=0,
+                 data_size=5):
+
+        cdef p4est_init_t callback_c
+        cdef InitCallbackContainer callback_cont
+
+        if isinstance(user_data_init_callback, InitCallbackContainer):
+            callback_cont =  <InitCallbackContainer> user_data_init_callback
+            callback_c = <p4est_init_t> callback_cont.callback_c
+        elif callable(user_data_init_callback):
+            self._init_callback_python = user_data_init_callback
+            callback_c = <p4est_init_t> _wrap_init_callback
+        else:
+            raise TypeError('user_data_init_callback neither callabel ' + 
+                            'nor of type InitCallbackContainer')
+
         self._con = connectivity
-        self._init_callback_c = <p4est_init_t> _user_data_init_callback
-        self._init_callback_python = user_data_init_callback
         self._quadrant_template = Quadrant.__new__(Quadrant)
         self._p4est = p4est_new_ext(comm_c, self._con._con, 0, 
                                     initial_level, fill_uniform,
-                                    data_size, self._init_callback_c, <void *> self)
-        self._init_callback_python = None
-        self._init_callback_c = NULL
-
+                                    data_size, callback_c,
+                                    <void *> self)
+        # TODO: error checking?
 
     def __dealloc__(self):
-        p4est_destroy(self._p4est)
+        if self._p4est is not NULL:
+            p4est_destroy(self._p4est)
         self._p4est = NULL
         self._con = None 
 
-    
+    def quadrants(self):
+        pass
+
+
+#############################################
+# Example for fast callback in cython       # 
+#############################################
+
+cdef void my_callback(p4est_t *p4est,
+                      p4est_topidx_t which_tree,
+                      p4est_quadrant_t *quadrant):
+    print "hallo"
+
+
+cdef InitCallbackContainer container = InitCallbackContainer()
+container.callback_c = <p4est_init_t> my_callback
+
+fast_callable = container
+
