@@ -3,7 +3,6 @@ from _c_p4est cimport *
 cdef extern from "p4est_ghost.h" nogil:
     enum: P4EST_GHOST_H
 
-    SC_EXTERN_C_BEGIN
     ctypedef struct p4est_ghost_t:
         int mpisize
         p4est_topidx_t num_trees
@@ -19,4 +18,4 @@ cdef extern from "p4est_ghost.h" nogil:
     int p4est_quadrant_exists (p4est_t * p4est, p4est_ghost_t * ghost, p4est_topidx_t treeid, p4est_quadrant_t * q, sc_array_t * exists_arr)
     int p4est_is_balanced (p4est_t * p4est, p4est_connect_type_t btype)
     unsigned p4est_ghost_checksum (p4est_t * p4est, p4est_ghost_t * ghost)
-    SC_EXTERN_C_END
+

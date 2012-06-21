@@ -6,7 +6,6 @@ cdef extern from "p4est.h" nogil:
     enum: P4EST_QMAXLEVEL
     enum: P4EST_ROOT_LEN
 
-    SC_EXTERN_C_BEGIN
     cdef struct _struct_piggy1:
         p4est_topidx_t which_tree
         int owner_rank
@@ -100,4 +99,4 @@ cdef extern from "p4est.h" nogil:
     p4est_quadrant_t * p4est_quadrant_array_push (sc_array_t * array)
     p4est_quadrant_t * p4est_quadrant_mempool_alloc (sc_mempool_t * mempool)
     p4est_quadrant_t * p4est_quadrant_list_pop (sc_list_t * list)
-    SC_EXTERN_C_END
+

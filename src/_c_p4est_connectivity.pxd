@@ -17,7 +17,6 @@ cdef extern from "p4est_connectivity.h" nogil:
     enum: P4EST_BALANCE_FULL
     enum: p4est_balance_type_t
 
-    SC_EXTERN_C_BEGIN
     enum p4est_connect_type_t:
         P4EST_CONNECT_FACE = 21
         P4EST_CONNECT_CORNER = 22
@@ -79,4 +78,4 @@ cdef extern from "p4est_connectivity.h" nogil:
     void p4est_connectivity_permute (p4est_connectivity_t * conn, sc_array_t * perm, int is_current_to_new)
     void p4est_connectivity_reorder (MPI_Comm comm, int k, p4est_connectivity_t * conn, p4est_connect_type_t ctype)
     p4est_corner_transform_t * p4est_corner_array_index (sc_array_t * array, size_t it)
-    SC_EXTERN_C_END
+

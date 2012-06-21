@@ -4,7 +4,6 @@ from _c_p4est_ghost cimport *
 cdef extern from "p4est_nodes.h" nogil:
     enum: P4EST_NODES_H
 
-    SC_EXTERN_C_BEGIN
     cdef struct _struct_piggy1:
         p4est_topidx_t which_tree
         int owner_rank
@@ -66,4 +65,4 @@ cdef extern from "p4est_nodes.h" nogil:
     p4est_nodes_t *p4est_nodes_new (p4est_t * p4est, p4est_ghost_t * ghost)
     void p4est_nodes_destroy (p4est_nodes_t * nodes)
     int p4est_nodes_is_valid (p4est_t * p4est, p4est_nodes_t * nodes)
-    SC_EXTERN_C_END
+
