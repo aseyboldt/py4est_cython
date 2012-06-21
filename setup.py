@@ -4,11 +4,12 @@ from Cython.Distutils import build_ext
 
 import mpi4py
 
-print mpi4py.get_include()
-
 setup(
+    name='py4est',
+    packages=['py4est'],
+    package_dir = {'': 'src'},
     cmdclass = {'build_ext': build_ext},
-    ext_modules = [Extension("src/_py4est", 
+    ext_modules = [Extension("py4est._py4est", 
                              ["src/py4est_cython.pyx"],
                              include_dirs=[mpi4py.get_include(),
                                            '/usr/include',
