@@ -1,9 +1,9 @@
-from _c_sc_obstack cimport *
+from libc.stdint cimport *
+from _c_sc cimport *
 
 cdef extern from "sc_containers.h" nogil:
     enum: SC_CONTAINERS_H
 
-    SC_EXTERN_C_BEGIN
     ctypedef unsigned (*sc_hash_function_t) (void *v, void *u)
     ctypedef int (*sc_equal_function_t) (void *v1, void *v2, void *u)
     ctypedef int (*sc_hash_foreach_t) (void **v, void *u)
@@ -41,17 +41,18 @@ cdef extern from "sc_containers.h" nogil:
     void * sc_array_index (sc_array_t * array, size_t iz)
     void * sc_array_index_int (sc_array_t * array, int i)
     void * sc_array_index_long (sc_array_t * array, long l)
-    void * sc_array_index_ssize_t (sc_array_t * array, ssize_t is)
+    void * sc_array_index_ssize_t (sc_array_t * array, ssize_t)
     void * sc_array_index_int16 (sc_array_t * array, int16_t i16)
     size_t sc_array_position (sc_array_t * array, void *element)
     void * sc_array_pop (sc_array_t * array)
     void * sc_array_push_count (sc_array_t * array, size_t add_count)
     void * sc_array_push (sc_array_t * array)
     cdef struct sc_mempool:
-        size_t elem_size
-        size_t elem_count
-        obstack obstack
-        sc_array_t freed
+        #size_t elem_size
+        #size_t elem_count
+        #obstack obstack
+        #sc_array_t freed
+        pass
     ctypedef sc_mempool sc_mempool_t
     size_t sc_mempool_memory_used (sc_mempool_t * mempool)
     sc_mempool_t *sc_mempool_new (size_t elem_size)
@@ -131,4 +132,4 @@ cdef extern from "sc_containers.h" nogil:
     void sc_recycle_array_reset (sc_recycle_array_t * rec_array)
     void *sc_recycle_array_insert (sc_recycle_array_t * rec_array, size_t * position)
     void *sc_recycle_array_remove (sc_recycle_array_t * rec_array, size_t position)
-    SC_EXTERN_C_END
+

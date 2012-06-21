@@ -4,7 +4,6 @@ from _c_sc_containers cimport *
 cdef extern from "sc_io.h" nogil:
     enum: SC_IO_H
 
-    SC_EXTERN_C_BEGIN
     enum sc_io_error_t:
         SC_IO_ERROR_NONE
         SC_IO_ERROR_FATAL = -1
@@ -53,4 +52,4 @@ cdef extern from "sc_io.h" nogil:
     void sc_fwrite (void *ptr, size_t size, size_t nmemb, FILE * file, char *errmsg)
     void sc_fread (void *ptr, size_t size, size_t nmemb, FILE * file, char *errmsg)
     void sc_mpi_write (MPI_File mpifile, void *ptr, size_t zcount, MPI_Datatype t, char *errmsg)
-    SC_EXTERN_C_END
+
