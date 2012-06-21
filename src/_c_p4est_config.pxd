@@ -1,0 +1,43 @@
+
+cdef extern from "p4est_config.h" nogil:
+    enum: _SRC_P_EST_CONFIG_H
+    enum: P4EST_BUILD_2D
+    enum: P4EST_BUILD_3D
+    enum: P4EST_CC
+    enum: P4EST_CFLAGS
+    enum: P4EST_CPP
+    enum: P4EST_CPPFLAGS
+    enum: P4EST_C_VERSION
+    enum: P4EST_HAVE_ARPA_INET_H
+    enum: P4EST_HAVE_DLFCN_H
+    enum: P4EST_HAVE_FSYNC
+    enum: P4EST_HAVE_INTTYPES_H
+    enum: P4EST_HAVE_MEMORY_H
+    enum: P4EST_HAVE_NETINET_IN_H
+    enum: P4EST_HAVE_STDINT_H
+    enum: P4EST_HAVE_STDLIB_H
+    enum: P4EST_HAVE_STRINGS_H
+    enum: P4EST_HAVE_STRING_H
+    enum: P4EST_HAVE_SYS_STAT_H
+    enum: P4EST_HAVE_SYS_TYPES_H
+    enum: P4EST_HAVE_UNISTD_H
+    enum: P4EST_LDFLAGS
+    enum: P4EST_LIBS
+    enum: P4EST_LT_OBJDIR
+    enum: P4EST_MPI
+    enum: P4EST_MPI_TESTS
+    enum: P4EST_PACKAGE
+    enum: P4EST_PACKAGE_BUGREPORT
+    enum: P4EST_PACKAGE_NAME
+    enum: P4EST_PACKAGE_STRING
+    enum: P4EST_PACKAGE_TARNAME
+    enum: P4EST_PACKAGE_URL
+    enum: P4EST_PACKAGE_VERSION
+    enum: P4EST_PROVIDE_LUA
+    enum: P4EST_PROVIDE_SC
+    enum: P4EST_PROVIDE_ZLIB
+    enum: P4EST_STDC_HEADERS
+    enum: P4EST_VERSION
+    enum: P4EST_VTK_BINARY
+    enum: P4EST_VTK_COMPRESSION
+
