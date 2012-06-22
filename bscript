@@ -30,11 +30,12 @@ def startup(context):
     except KeyError:
         pass
         
-    conf.check_cfg(path='mpicc', args='--showme:compile --showme:link',
+    conf.check_cfg(path='mpicc', args='--showme:compile',
+                   package='', uselib_store='mpi')
+    conf.check_cfg(path='mpicc', args='--showme:link',
                    package='', uselib_store='mpi')
 
     conf.check_cc(lib='sc', uselib_store='sc')
-    #conf.check_cc(lib='mpi', uselib_store='mpi')
     conf.check_cc(lib='p4est', uselib_store='p4est')
     
     import mpi4py    
