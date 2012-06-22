@@ -1,0 +1,46 @@
+from bento.commands import hooks
+import os
+
+@hooks.pre_build
+def bre_build(context):    
+    context.tweak_extension("py4est._py4est", use='mpi p4est sc')
+
+
+@hooks.post_configure
+def startup(context):
+    conf = context.waf_context
+    #conf = context.yaku_context
+    
+    conf.load('python')
+    
+    conf.check_python_module('mpi4py')
+    
+    try:    
+        conf.env.append_unique('CFLAGS', os.environ['bla'])
+    except KeyError:
+        pass
+    
+    try:
+        conf.env.append_unique('LIBPATH', os.environ['LD_LIBRARY_PATH'].split(':'))
+    except KeyError:
+        pass
+        
+    try:
+        conf.env.append_unique('INCLUDES', os.environ['INCLUDES'].split(':'))
+    except KeyError:
+        pass
+        
+    conf.check_cfg(path='mpicc', args='--showme:compile --showme:link',
+                   package='', uselib_store='mpi')
+
+    conf.check_cc(lib='sc', uselib_store='sc')
+    #conf.check_cc(lib='mpi', uselib_store='mpi')
+    conf.check_cc(lib='p4est', uselib_store='p4est')
+    
+    import mpi4py    
+    conf.env.CYINCLUDES = '-I' + mpi4py.get_include()
+    
+    conf.check_cc(header_name='sc.h', use='mpi')
+    conf.check_cc(header_name='p4est.h', use='mpi')
+    conf.check_cc(header_name='mpi.h', use='mpi')
+    conf.check_python_headers()

@@ -1,0 +1,26 @@
+Name: py4est
+Summary: python wrapper for p4est, a library managing meshes in PDGs
+DescriptionFromFile: README.rst
+Version: 0.0.1
+
+
+UseBackends: Waf
+HookFile: bscript
+
+
+Library:
+    Packages:
+        py4est
+    Extension: py4est._py4est
+        Sources:
+            py4est/_py4est.pyx
+
+DataFiles: pxd
+    TargetDir: $sitedir
+    Files: py4est/*.pxd
+
+
+ExtraSourceFiles:
+    bentomaker,
+    README.rst
+

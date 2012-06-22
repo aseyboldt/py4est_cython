@@ -2,3 +2,4 @@ build
 src/py4est_cython.c
 *~
 *.so
+.bento*
