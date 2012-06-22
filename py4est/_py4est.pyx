@@ -5,9 +5,10 @@ from mpi4py import MPI
 # log level for p4est and sc
 _LP = 0
 
+
 from _c_p4est_base cimport p4est_init, p4est_topidx_t
 from _c_p4est cimport (p4est_t, p4est_quadrant_t, p4est_init_t,
-                       p4est_destroy, p4est_tree_t, p4est_tree_array_index)
+                              p4est_destroy, p4est_tree_t, p4est_tree_array_index)
 from _c_p4est_connectivity cimport (p4est_connectivity_t,
                                     p4est_connectivity_new_unitsquare,
                                     p4est_connectivity_destroy,
@@ -229,6 +230,8 @@ cdef class Forrest:
             else:
                 leaf._which_quad += 1
 
+        cdef int a = 0
+
 
 
 
@@ -247,4 +250,3 @@ cdef InitCallbackContainer container = InitCallbackContainer()
 container.callback_c = <p4est_init_t> my_callback
 
 fast_callable = container
-
