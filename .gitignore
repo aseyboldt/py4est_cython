@@ -3,3 +3,6 @@ src/py4est_cython.c
 *~
 *.so
 .bento*
+*.swp
+*html
+*.pyc
