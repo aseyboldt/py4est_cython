@@ -4,7 +4,8 @@ from mpi4py import MPI
 
 from _c_p4est_base cimport p4est_init, p4est_topidx_t
 from _c_p4est cimport (p4est_t, p4est_quadrant_t, p4est_init_t,
-                       p4est_destroy, p4est_tree_t, p4est_tree_array_index)
+                       p4est_destroy, p4est_tree_t, p4est_tree_array_index,
+                       p4est_quadrant_array_index)
 from _c_p4est_connectivity cimport (p4est_connectivity_t,
                                     p4est_connectivity_new_unitsquare,
                                     p4est_connectivity_new_periodic,
@@ -95,8 +96,9 @@ cdef class Quadrant:
     Wrap a p4est_qudrant and provide methods to access the members.
 
     It does not own the underlying c-object and can not be instantiated
-    from within pure python. Do not store Quadrant-objects yourself as they
-    are only valid during an iteration. (The underlying c struct will change!)
+    from within pure python. Do not store Quadrant-objects yourself
+    as they are only valid during an iteration. (The underlying c struct
+    will change!)
     """
     cdef p4est_quadrant_t *_quadrant
 
@@ -124,7 +126,6 @@ cdef class Quadrant:
         def __get__(self):
             raise NotImplementedError()
 
-
     def __init__(self):
         raise ValueError("Quadrant can not be instantiated")
 
@@ -135,7 +136,42 @@ cdef class Quadrant:
         return "Quadrant(x={}, y={}, level={}, pad8={}, pad16={})".format(
                 self.x, self.y, self.level, self.pad8, self.pad16)
 
+cdef QuadrantFactory(p4est_quadrant_t *quadrant):
+    cdef Quadrant quad = Quadrant.__new__(Quadrant)
+    quad._change_quadrant(quadrant)
+    return quad
 
+
+cdef class Ghost:
+    cdef p4est_ghost_t *_ghost
+
+    def __init__(self, Forest forest not None):
+        self._ghost = p4est_ghost_new(forest._p4est, P4EST_CONNECT_FULL)
+
+    def __dealloc__(self):
+        if self._ghost is not NULL:
+            p4est_ghost_destroy(self._ghost)  # TODO
+
+
+cdef class Mesh:
+    cdef p4est_mesh_t *_mesh
+
+    def __init__(self, Forest forest not None, Ghost ghost not None):
+        self._mesh = p4est_mesh_new(forest._p4est, ghost._ghost,
+                                    P4EST_CONNECT_FULL)
+
+    def __dealloc__(self):
+        if self._mesh is not NULL:
+            p4est_mesh_destroy(self._mesh)  # TODO
+
+
+# wrap python function inside C
+cdef void _wrap_init_callback(p4est_t *p4est,
+                                   p4est_topidx_t which_tree,
+                                   p4est_quadrant_t *quadrant) with gil:
+    cdef Forest forest_py = <Forest> p4est.user_pointer
+    forest_py._quadrant_template._change_quadrant(quadrant)
+    forest_py._init_callback_python(forest_py._quadrant_template)
 
 
 cdef class InitCallbackContainer:
@@ -159,37 +195,58 @@ cdef class InitCallbackContainer:
     cdef p4est_init_t callback_c
 
 
+cdef class Forest:
+    """ Create the local part of the specified forest
 
-cdef void _wrap_init_callback(p4est_t *p4est,
-                                   p4est_topidx_t which_tree,
-                                   p4est_quadrant_t *quadrant) with gil:
-    cdef P4est p4est_py = <P4est> p4est.user_pointer
-    p4est_py._quadrant_template._change_quadrant(quadrant)
-    p4est_py._init_callback_python(p4est_py._quadrant_template)  #TODO
+    Use the same specifications on all processors. If you don't, this
+    might crash the program (right? TODO)
 
-
-
-cdef class P4est(object):
+    Parameters
+    ----------
+    connectivity : Connectivity
+       Object describing how the trees are connected
+    init_callback : callable or InitCallbackContainer
+       This functon is called with each new quadrant as parameter
+    mpicomm : MPI.Com
+       The MPI Communicator to be used by p4est
+    min_level : int
+       The forest is refined at least to this level
+    min_quadrants : int
+       Minimum initial quadrants per processor
+    fill_uniform : bool
+       If true, fill the forest with a uniform mesh. If false, fill
+       it with the coarsest possible one. 
+    """
     cdef p4est_t *_p4est
     cdef Connectivity _con
+    cdef Ghost _ghost
+    cdef Mesh _mesh
+
+    # used for python callbacks in py4est
     cdef object _init_callback_python
     cdef Quadrant _quadrant_template
 
-    def __init__(self, MPI.Comm mpicomm not None,
-                 Connectivity connectivity not None,
-                 user_data_init_callback=None,
-                 initial_level=0,
+    cdef MPI.Comm _mpicomm
+
+    def __init__(self, Connectivity connectivity not None, 
+                 init_callback=lambda x: None,
+                 MPI.Comm mpicomm not None=MPI.COMM_WORLD,
+                 min_level=0,
                  fill_uniform=1,
                  data_size=0):
-
+        if min_level >= 30:
+            raise ValueError("initial_level too big (max is 30)")
+        self._con = connectivity
+        
+        # handle init_callback 
         cdef p4est_init_t callback_c
         cdef InitCallbackContainer callback_cont
 
-        if isinstance(user_data_init_callback, InitCallbackContainer):
-            callback_cont =  <InitCallbackContainer> user_data_init_callback
+        if isinstance(init_callback, InitCallbackContainer):
+            callback_cont =  <InitCallbackContainer> init_callback
             callback_c = <p4est_init_t> callback_cont.callback_c
-        elif callable(user_data_init_callback):
-            self._init_callback_python = user_data_init_callback
+        elif callable(init_callback):
+            self._init_callback_python = init_callback
             callback_c = <p4est_init_t> _wrap_init_callback
         else:
             raise TypeError('user_data_init_callback neither callabel ' + 
@@ -199,104 +256,68 @@ cdef class P4est(object):
         self._quadrant_template = Quadrant.__new__(Quadrant)
         self._p4est = p4est_new_ext(mpicomm.ob_mpi,
                                     self._con._con, 0, 
-                                    initial_level, fill_uniform,
+                                    min_level, fill_uniform,
                                     data_size, callback_c,
                                     <void *> self)
         # TODO: error checking?
 
+
+        self._ghost = Ghost(self)
+        self._mesh = Mesh(self, self._ghost)
+        self._mpicomm = mpicomm
+
     def __dealloc__(self):
         if self._p4est is not NULL:
             p4est_destroy(self._p4est)
-        self._p4est = NULL
-        self._con = None 
 
+    def leafs(self, reuse_object=False):
+        """ Return iterator for all leafs owned by this process
 
-cdef class Ghost:
-    cdef p4est_ghost_t *_ghost
-    cdef P4est _p4est
+        Parameters
+        ----------
+        reuse_object : bool, optional
+           Use the same python object for all leafs. Change only
+           the underlying c-struct
 
-    def __init__(self, P4est p4est not None):
-        self._ghost = p4est_ghost_new(p4est._p4est, P4EST_CONNECT_FULL)
-        self._p4est = p4est
-
-    def __dealloc__(self):
-        if self._ghost is not NULL:
-            p4est_ghost_destroy(self._ghost)
-
-cdef class Mesh:
-    cdef p4est_mesh_t *_mesh
-    cdef Ghost _ghost
-    cdef P4est _p4est
-
-    def __init__(self, P4est p4est not None, Ghost ghost not None):
-        self._mesh = p4est_mesh_new(p4est._p4est, ghost._ghost,
-                                    P4EST_CONNECT_FULL)
-        self._p4est = p4est
-        self._ghost = ghost
-
-    def __dealloc__(self):
-        if self._mesh is not NULL:
-            p4est_mesh_destroy(self._mesh)
-
-
-cdef class Leaf:
-    cdef p4est_topidx_t _which_tree
-    cdef p4est_topidx_t _which_quad
-    cdef p4est_tree_t *_tree
-
-    cdef Forest _forest
-
-    def __init__(self, Forest forest not None):
-        self._forest = forest
-
-    def __str__(self):
-        return "Leaf(which_tree={}, which_quad={})".format(
-                  self._which_tree, self._which_quad)
-
-
-cdef class Forest:
-    cdef P4est _p4est
-    cdef Connectivity _con
-    cdef Ghost _ghost
-    cdef Mesh _mesh
-
-    cdef MPI.Comm _mpicomm
-
-    def __init__(self, Connectivity connectivity not None, init_callback,
-                 MPI.Comm mpicomm not None=MPI.COMM_WORLD,
-                 initial_level=0):  # TODO arguments?
-        if initial_level >= 30:
-            raise ValueError("initial_level too big (max is 30)")
-        self._con = connectivity
-        self._p4est = P4est(mpicomm, self._con, user_data_init_callback=init_callback,
-                            initial_level=initial_level)
-        self._ghost = Ghost(self._p4est)
-        self._mesh = Mesh(self._p4est, self._ghost)
-        self._mpicomm = mpicomm
-
-    def leafs(self):
-        cdef p4est_t *p4est = self._p4est._p4est
+        Returns
+        -------
+        leaf : Quadrant
+        """
+        cdef p4est_t *p4est = self._p4est
         
+        cdef p4est_topidx_t which_tree
+        cdef p4est_topidx_t which_quad
+        cdef p4est_tree_t *tree
+
+        cdef Quadrant leaf
+
         if p4est.local_num_quadrants == 0:
             raise StopIteration
 
-        cdef Leaf leaf = Leaf(self)
-        leaf._which_tree = p4est.first_local_tree
-        leaf._tree = p4est_tree_array_index(p4est.trees, leaf._which_tree)
-        leaf._which_quad = 0
+        which_tree = p4est.first_local_tree
+        tree = p4est_tree_array_index(p4est.trees, which_tree)
+        which_quad = 0  # why 0 ????? #TODO
+        
+        leaf = QuadrantFactory(p4est_quadrant_array_index(&tree.quadrants,
+                                                          which_quad))
 
         while True:
             yield leaf
             
-            if <size_t> leaf._which_quad + 1 == leaf._tree.quadrants.elem_count:
-                leaf._which_tree += 1
-                if leaf._which_tree  > p4est.last_local_tree:
+            if <size_t> which_quad + 1 == tree.quadrants.elem_count:
+                which_tree += 1
+                if which_tree  > p4est.last_local_tree:
                     raise StopIteration
                 
-                leaf._tree = p4est_tree_array_index(p4est.trees, leaf._which_tree)
-                leaf._which_quad = 0;
+                tree = p4est_tree_array_index(p4est.trees, which_tree)
+                which_quad = 0;
             else:
-                leaf._which_quad += 1
+                which_quad += 1
 
-        cdef int a = 0
+            if reuse_object:
+                leaf._change_quadrant(
+                        p4est_quadrant_array_index(&tree.quadrants, which_quad))
+            else:
+                leaf = QuadrantFactory(
+                        p4est_quadrant_array_index(&tree.quadrants, which_quad))
 
