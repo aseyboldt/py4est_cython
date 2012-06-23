@@ -179,7 +179,7 @@ cdef class P4est(object):
                  Connectivity connectivity not None,
                  user_data_init_callback=None,
                  initial_level=0,
-                 fill_uniform=0,
+                 fill_uniform=1,
                  data_size=0):
 
         cdef p4est_init_t callback_c
