@@ -9,6 +9,9 @@ def bre_build(context):
 @hooks.post_configure
 def startup(context):
     conf = context.waf_context
+    
+    conf.cc_add_flags()
+    
     #conf = context.yaku_context
     
     conf.load('python')
@@ -44,4 +47,5 @@ def startup(context):
     conf.check_cc(header_name='sc.h', use='mpi')
     conf.check_cc(header_name='p4est.h', use='mpi')
     conf.check_cc(header_name='mpi.h', use='mpi')
+    
     conf.check_python_headers()
