@@ -5,13 +5,16 @@ from mpi4py import MPI
 from _c_p4est_base cimport p4est_init, p4est_topidx_t
 from _c_p4est cimport (p4est_t, p4est_quadrant_t, p4est_init_t,
                        p4est_destroy, p4est_tree_t, p4est_tree_array_index,
-                       p4est_quadrant_array_index)
+                       p4est_quadrant_array_index, p4est_refine_t,
+                       p4est_refine, p4est_balance)
 from _c_p4est_connectivity cimport (p4est_connectivity_t,
                                     p4est_connectivity_new_unitsquare,
                                     p4est_connectivity_new_periodic,
                                     p4est_connectivity_new_moebius,
                                     p4est_connectivity_destroy,
-                                    P4EST_CONNECT_FULL)
+                                    P4EST_CONNECT_CORNER,
+                                    P4EST_CONNECT_FACE,
+                                    p4est_connect_type_t)
 from _c_p4est_ghost cimport p4est_ghost_t, p4est_ghost_new, p4est_ghost_destroy
 from _c_p4est_mesh cimport p4est_mesh_t, p4est_mesh_new, p4est_mesh_destroy
 from _c_p4est_extended cimport p4est_new_ext
@@ -72,6 +75,7 @@ cdef class Connectivity(object):
     """ This class describes inter-tree connectivity 
     
     wraps py4est_connectivity
+    
     """
 
     cdef p4est_connectivity_t *_con
@@ -99,6 +103,7 @@ cdef class Quadrant:
     from within pure python. Do not store Quadrant-objects yourself
     as they are only valid during an iteration. (The underlying c struct
     will change!)
+
     """
     cdef p4est_quadrant_t *_quadrant
 
@@ -146,11 +151,12 @@ cdef class Ghost:
     cdef p4est_ghost_t *_ghost
 
     def __init__(self, Forest forest not None):
-        self._ghost = p4est_ghost_new(forest._p4est, P4EST_CONNECT_FULL)
+        self._ghost = p4est_ghost_new(forest._p4est, 
+                                      P4EST_CONNECT_CORNER) #TODO connect_t, error
 
     def __dealloc__(self):
         if self._ghost is not NULL:
-            p4est_ghost_destroy(self._ghost)  # TODO
+            p4est_ghost_destroy(self._ghost)
 
 
 cdef class Mesh:
@@ -158,24 +164,34 @@ cdef class Mesh:
 
     def __init__(self, Forest forest not None, Ghost ghost not None):
         self._mesh = p4est_mesh_new(forest._p4est, ghost._ghost,
-                                    P4EST_CONNECT_FULL)
+                                    P4EST_CONNECT_CORNER) #TODO connect_t, error
 
     def __dealloc__(self):
         if self._mesh is not NULL:
-            p4est_mesh_destroy(self._mesh)  # TODO
+            p4est_mesh_destroy(self._mesh) 
 
 
 # wrap python function inside C
 cdef void _wrap_init_callback(p4est_t *p4est,
-                                   p4est_topidx_t which_tree,
-                                   p4est_quadrant_t *quadrant) with gil:
+                              p4est_topidx_t which_tree,
+                              p4est_quadrant_t *quadrant) with gil:
     cdef Forest forest_py = <Forest> p4est.user_pointer
     forest_py._quadrant_template._change_quadrant(quadrant)
     forest_py._init_callback_python(forest_py._quadrant_template)
 
+cdef int _wrap_refine_callback(p4est_t *p4est,
+                               p4est_topidx_t which_tree,
+                               p4est_quadrant_t *quadrant) with gil:
+    cdef Forest forest_py = <Forest> p4est.user_pointer
+    forest_py._quadrant_template._change_quadrant(quadrant)
+    return forest_py._refine_callback_python(forest_py._quadrant_template)
+
 
 cdef class InitCallbackContainer:
     """ A simple wrapper around a p4est_init_t function
+         (*p4est_refine_t) (p4est_t * p4est,
+                                       p4est_topidx_t which_tree,
+                                       p4est_quadrant_t * quadrant);
 
     Useage from cython::
 
@@ -193,6 +209,7 @@ cdef class InitCallbackContainer:
     
     """
     cdef p4est_init_t callback_c
+
 
 
 cdef class Forest:
@@ -216,6 +233,7 @@ cdef class Forest:
     fill_uniform : bool
        If true, fill the forest with a uniform mesh. If false, fill
        it with the coarsest possible one. 
+
     """
     cdef p4est_t *_p4est
     cdef Connectivity _con
@@ -224,9 +242,25 @@ cdef class Forest:
 
     # used for python callbacks in py4est
     cdef object _init_callback_python
+    cdef object _refine_callback_python
+    cdef p4est_init_t _init_callback_c
+    cdef p4est_refine_t _refine_callback_c
     cdef Quadrant _quadrant_template
 
     cdef MPI.Comm _mpicomm
+
+    property num_local_quadrants:
+        """ The number of quadrants that are stored on this process"""
+
+        def __get__(self):
+            return self._p4est.local_num_quadrants
+
+    property num_global_quadrants:
+        """ The number of quadrants on all processors"""
+
+        def __get__(self):
+            return self._p4est.global_num_quadrants
+
 
     def __init__(self, Connectivity connectivity not None, 
                  init_callback=lambda x: None,
@@ -239,15 +273,14 @@ cdef class Forest:
         self._con = connectivity
         
         # handle init_callback 
-        cdef p4est_init_t callback_c
         cdef InitCallbackContainer callback_cont
 
         if isinstance(init_callback, InitCallbackContainer):
             callback_cont =  <InitCallbackContainer> init_callback
-            callback_c = <p4est_init_t> callback_cont.callback_c
+            self._init_callback_c = <p4est_init_t> callback_cont.callback_c
         elif callable(init_callback):
             self._init_callback_python = init_callback
-            callback_c = <p4est_init_t> _wrap_init_callback
+            self._init_callback_c = <p4est_init_t> _wrap_init_callback
         else:
             raise TypeError('user_data_init_callback neither callabel ' + 
                             'nor of type InitCallbackContainer')
@@ -257,7 +290,7 @@ cdef class Forest:
         self._p4est = p4est_new_ext(mpicomm.ob_mpi,
                                     self._con._con, 0, 
                                     min_level, fill_uniform,
-                                    data_size, callback_c,
+                                    data_size, self._init_callback_c,
                                     <void *> self)
         # TODO: error checking?
 
@@ -270,18 +303,39 @@ cdef class Forest:
         if self._p4est is not NULL:
             p4est_destroy(self._p4est)
 
-    def leafs(self, reuse_object=False):
-        """ Return iterator for all leafs owned by this process
+    def refine(self, refine_callback, refine_recursive=False):
+        if not callable(refine_callback):
+            raise ValueError("refine_callback is not callable")
+        self._refine_callback_python = refine_callback
+        self._refine_callback_c = _wrap_refine_callback
+        p4est_refine(self._p4est, refine_recursive, self._refine_callback_c,
+                     self._init_callback_c)
+
+    def balance(self, balance_type='corner'):
+        if balance_type == 'face':
+            p4est_balance(self._p4est, P4EST_CONNECT_FACE,
+                          self._init_callback_c)
+        elif balance_type == 'corner':
+            p4est_balance(self._p4est, P4EST_CONNECT_CORNER,
+                          self._init_callback_c)
+        else:
+            raise ValueError('balance_type has to be one of "full",' +
+                             '"face" or "corner"')
+
+
+    def local_quadrants(self, reuse_object=False):
+        """ Return iterator for all quadrants owned by this process
 
         Parameters
         ----------
         reuse_object : bool, optional
-           Use the same python object for all leafs. Change only
+           Use the same python object for all quadrants. Change only
            the underlying c-struct
 
         Returns
         -------
-        leaf : Quadrant
+        quadrants : iterator over Quadrants
+
         """
         cdef p4est_t *p4est = self._p4est
         
